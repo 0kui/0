@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>垂直棉花收集追逐遊戲</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 100%);
+            transition: background 0.3s ease;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: transparent;
+        }
+
+        #scorePanel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.2);
+            min-width: 200px;
+            z-index: 100;
+        }
+
+        #scorePanel div {
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #trapWarning {
+            color: #ff6b6b;
+            animation: pulse 1s infinite;
+        }
+
+        #policeChase {
+            color: #ff3838;
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 200;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            border: 2px solid #feca57;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 300;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 10px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        #instructions {
+            max-width: 700px;
+            text-align: center;
+            margin: 20px;
+            line-height: 1.8;
+            font-size: 18px;
+            background: rgba(0,0,0,0.2);
+            padding: 30px;
+            border-radius: 15px;
+        }
+
+        .road-indicator {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-size: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            z-index: 100;
+        }
+
+        .difficulty-indicator {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="startScreen">
+            <h1 style="font-size: 56px; margin-bottom: 20px; text-shadow: 3px 3px 6px rgba(0,0,0,0.5);">🌾 棉花田收穫 🌾</h1>
+            <div id="instructions">
+                <h3 style="margin-bottom: 20px; color: #feca57;">🎯 遊戲目標</h3>
+                <p><strong>🛤️ 穿越5條農田小徑：</strong> 明智地選擇你的路線！</p>
+                <p><strong>☁️ 收集棉花：</strong> 在日落前收穫最多棉花！</p>
+                <p><strong>⚠️ 避開陷阱：</strong> 踩到2個陷阱 = 遊戲結束！</p>
+                <p><strong>🚨 警察追捕：</strong> 踩到1個陷阱就會被追捕！</p>
+                <br>
+                <h3 style="color: #feca57;">🎮 操作方式</h3>
+                <p><strong>←→ 方向鍵 / A/D：</strong> 在農田小徑間切換</p>
+                <p><strong>↑↓ 方向鍵 / W/S：</strong> 在小徑內上下移動</p>
+                <br>
+                <p style="color: #ff6b6b; font-weight: bold;">⏰ 距離日落還有90秒 - 難度會隨時間增加！</p>
+            </div>
+            <button onclick="startGame()">🚀 開始冒險</button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="scorePanel">
+            <div>☁️ 棉花: <span id="score">0</span></div>
+            <div>⏰ 時間: <span id="timer">1:30</span></div>
+            <div>🌾 小徑: <span id="currentRoad">3</span>/5</div>
+            <div id="trapWarning" style="display: none;">⚠️ 陷阱警告！</div>
+            <div id="policeChase" style="display: none;">🚨 警察追捕！</div>
+        </div>
+
+        <div class="road-indicator">
+            <div id="roadInfo">使用 ←→ 切換小徑 | 速度會隨時間加快</div>
+        </div>
+
+        <div class="difficulty-indicator">
+            <div id="difficultyLevel">難度：簡單</div>
+        </div>
+
+        <div id="gameOver">
+            <h2 id="gameOverTitle">遊戲結束！</h2>
+            <p id="gameOverText">最終分數：0</p>
+            <button onclick="restartGame()">🔄 再試一次</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game state
+        let gameRunning = false;
+        let gameTime = 90;
+        let score = 0;
+        let trapCount = 0;
+        let policeChasing = false;
+        let gameSpeed = 2;
+        let playerSpeed = 6;
+        let spawnRate = 0.015;
+        let trapSpawnRate = 0.006;
+        let difficultyLevel = 1;
+
+        // Player
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height - 100,
+            width: 50,
+            height: 50,
+            road: 2, // 0-4 for 5 roads
+            color: '#ff6b6b'
+        };
+
+        // Police officer
+        const police = {
+            x: player.x,
+            y: canvas.height + 100,
+            width: 45,
+            height: 45,
+            speed: 4,
+            active: false
+        };
+
+        // Game objects
+        let fruits = [];
+        let traps = [];
+        let particles = [];
+        let roadSurfaces = [];
+
+        // Road positions (5 vertical roads)
+        const roadWidth = canvas.width / 5;
+        const roadPositions = [];
+        for (let i = 0; i < 5; i++) {
+            roadPositions.push({
+                x: i * roadWidth,
+                width: roadWidth,
+                centerX: i * roadWidth + roadWidth / 2
+            });
+        }
+
+        // Input handling
+        const keys = {};
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            
+            // Road switching
+            if (e.key === 'ArrowLeft' || e.key === 'a') {
+                if (player.road > 0) {
+                    player.road--;
+                    updateRoadInfo();
+                }
+            }
+            if (e.key === 'ArrowRight' || e.key === 'd') {
+                if (player.road < 4) {
+                    player.road++;
+                    updateRoadInfo();
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        function updateRoadInfo() {
+            document.getElementById('currentRoad').textContent = player.road + 1;
+        }
+
+        function updateDifficulty() {
+            const timeElapsed = 90 - gameTime;
+            const newLevel = Math.floor(timeElapsed / 15) + 1;
+            
+            if (newLevel !== difficultyLevel) {
+                difficultyLevel = newLevel;
+                gameSpeed = 2 + (difficultyLevel - 1) * 0.8;
+                spawnRate = 0.015 + (difficultyLevel - 1) * 0.008;
+                trapSpawnRate = 0.006 + (difficultyLevel - 1) * 0.004;
+                
+                const levels = ['簡單', '中等', '困難', '專家', '瘋狂', '不可能'];
+                document.getElementById('difficultyLevel').textContent = 
+                    `難度：${levels[Math.min(difficultyLevel - 1, levels.length - 1)]}`;
+            }
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameRunning = true;
+            gameTime = 90;
+            score = 0;
+            trapCount = 0;
+            policeChasing = false;
+            difficultyLevel = 1;
+            gameSpeed = 2;
+            spawnRate = 0.015;
+            trapSpawnRate = 0.006;
+            
+            player.x = roadPositions[2].centerX - player.width / 2;
+            player.road = 2;
+            player.y = canvas.height - 100;
+            police.active = false;
+            police.y = canvas.height + 100;
+            
+            fruits = [];
+            traps = [];
+            particles = [];
+            
+            updateUI();
+            updateRoadInfo();
+            gameLoop();
+            startTimer();
+        }
+
+        function restartGame() {
+            document.getElementById('gameOver').style.display = 'none';
+            startGame();
+        }
+
+        function startTimer() {
+            const timer = setInterval(() => {
+                if (!gameRunning) {
+                    clearInterval(timer);
+                    return;
+                }
+                
+                gameTime--;
+                updateUI();
+                updateBackground();
+                updateDifficulty();
+                
+                if (gameTime <= 0) {
+                    endGame("日落了！時間到！");
+                    clearInterval(timer);
+                }
+            }, 1000);
+        }
+
+        function updateBackground() {
+            const timeProgress = (90 - gameTime) / 90;
+            let r, g, b, r2, g2, b2;
+            
+            if (timeProgress < 0.3) {
+                // Day (blue sky)
+                r = 135; g = 206; b = 235;
+                r2 = 152; g2 = 251; b2 = 152;
+            } else if (timeProgress < 0.7) {
+                // Afternoon transition
+                const progress = (timeProgress - 0.3) / 0.4;
+                r = 135 + (255 - 135) * progress;
+                g = 206 + (165 - 206) * progress;
+                b = 235 + (0 - 235) * progress;
+                r2 = 152 + (255 - 152) * progress;
+                g2 = 251 + (140 - 251) * progress;
+                b2 = 152 + (0 - 152) * progress;
+            } else {
+                // Sunset (orange/red)
+                const progress = (timeProgress - 0.7) / 0.3;
+                r = 255 + (220 - 255) * progress;
+                g = 165 + (50 - 165) * progress;
+                b = 0;
+                r2 = 255 + (139 - 255) * progress;
+                g2 = 140 + (69 - 140) * progress;
+                b2 = 0 + (19 - 0) * progress;
+            }
+            
+            document.body.style.background = 
+                `linear-gradient(to bottom, rgb(${Math.floor(r)},${Math.floor(g)},${Math.floor(b)}) 0%, rgb(${Math.floor(r2)},${Math.floor(g2)},${Math.floor(b2)}) 100%)`;
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            const minutes = Math.floor(gameTime / 60);
+            const seconds = gameTime % 60;
+            document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            document.getElementById('trapWarning').style.display = trapCount === 1 ? 'block' : 'none';
+            document.getElementById('policeChase').style.display = police.active ? 'block' : 'none';
+        }
+
+        function spawnFruit() {
+            if (Math.random() < spawnRate) {
+                let roadIndex, attempts = 0;
+                let validPosition = false;
+                
+                // Find a road without overlapping items
+                while (!validPosition && attempts < 10) {
+                    roadIndex = Math.floor(Math.random() * 5);
+                    const roadCenter = roadPositions[roadIndex].centerX;
+                    
+                    validPosition = true;
+                    for (let item of [...fruits, ...traps]) {
+                        if (Math.abs(item.x - roadCenter) < roadWidth * 0.8 && item.y > -100) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                    attempts++;
+                }
+                
+                if (validPosition) {
+                    fruits.push({
+                        x: roadPositions[roadIndex].centerX - 25,
+                        y: -50,
+                        width: 50,
+                        height: 50,
+                        type: Math.floor(Math.random() * 4),
+                        collected: false,
+                        road: roadIndex
+                    });
+                }
+            }
+        }
+
+        function spawnTrap() {
+            if (Math.random() < trapSpawnRate) {
+                let roadIndex, attempts = 0;
+                let validPosition = false;
+                
+                while (!validPosition && attempts < 10) {
+                    roadIndex = Math.floor(Math.random() * 5);
+                    const roadCenter = roadPositions[roadIndex].centerX;
+                    
+                    validPosition = true;
+                    for (let item of [...fruits, ...traps]) {
+                        if (Math.abs(item.x - roadCenter) < roadWidth * 0.8 && item.y > -100) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                    attempts++;
+                }
+                
+                if (validPosition) {
+                    traps.push({
+                        x: roadPositions[roadIndex].centerX - 30,
+                        y: -50,
+                        width: 60,
+                        height: 40,
+                        triggered: false,
+                        road: roadIndex
+                    });
+                }
+            }
+        }
+
+        function createParticle(x, y, color, count = 8) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 15,
+                    vy: (Math.random() - 0.5) * 15,
+                    life: 40,
+                    maxLife: 40,
+                    color: color,
+                    size: Math.random() * 6 + 2
+                });
+            }
+        }
+
+        function updatePlayer() {
+            // Smooth road transition
+            const targetX = roadPositions[player.road].centerX - player.width / 2;
+            player.x += (targetX - player.x) * 0.15;
+            
+            // Horizontal movement within road
+            let moveSpeed = policeChasing ? playerSpeed * 0.7 : playerSpeed;
+            
+            if (keys['arrowup'] || keys['w']) {
+                player.x -= moveSpeed;
+            }
+            if (keys['arrowdown'] || keys['s']) {
+                player.x += moveSpeed;
+            }
+            
+            // Keep player within current road bounds
+            const roadBounds = roadPositions[player.road];
+            player.x = Math.max(roadBounds.x + 10, Math.min(roadBounds.x + roadBounds.width - player.width - 10, player.x));
+        }
+
+        function updatePolice() {
+            if (police.active) {
+                const dx = player.x - police.x;
+                const dy = player.y - police.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < 60) {
+                    endGame("警察抓到你了！");
+                    return;
+                }
+                
+                police.x += (dx / distance) * police.speed;
+                police.y += (dy / distance) * police.speed;
+            }
+        }
+
+        function checkCollisions() {
+            // Fruit collection
+            fruits.forEach((fruit, index) => {
+                if (!fruit.collected && 
+                    player.x < fruit.x + fruit.width &&
+                    player.x + player.width > fruit.x &&
+                    player.y < fruit.y + fruit.height &&
+                    player.y + player.height > fruit.y) {
+                    
+                    fruit.collected = true;
+                    score += 10;
+                    createParticle(fruit.x + fruit.width/2, fruit.y + fruit.height/2, '#feca57', 12);
+                    fruits.splice(index, 1);
+                }
+            });
+            
+            // Trap collision
+            traps.forEach((trap, index) => {
+                if (!trap.triggered &&
+                    player.x < trap.x + trap.width &&
+                    player.x + player.width > trap.x &&
+                    player.y < trap.y + trap.height &&
+                    player.y + player.height > trap.y) {
+                    
+                    trap.triggered = true;
+                    trapCount++;
+                    createParticle(trap.x + trap.width/2, trap.y + trap.height/2, '#ff4757', 15);
+                    
+                    if (trapCount >= 2) {
+                        endGame("被抓住了！你踩到太多陷阱了！");
+                        return;
+                    }
+                    
+                    if (trapCount === 1) {
+                        police.active = true;
+                        police.x = player.x;
+                        police.y = canvas.height + 50;
+                        policeChasing = true;
+                    }
+                }
+            });
+        }
+
+        function drawRoads() {
+            // Draw road surfaces
+            for (let i = 0; i < 5; i++) {
+                const road = roadPositions[i];
+                
+                // Road surface
+                ctx.fillStyle = i === player.road ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)';
+                ctx.fillRect(road.x, 0, road.width, canvas.height);
+                
+                // Road dividers
+                if (i < 4) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([20, 20]);
+                    ctx.beginPath();
+                    ctx.moveTo(road.x + road.width, 0);
+                    ctx.lineTo(road.x + road.width, canvas.height);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+        }
+
+        function drawPlayer() {
+            // Player shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(player.x + 5, player.y + 5, player.width, player.height);
+            
+            // Player body
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // Player face
+            ctx.fillStyle = 'white';
+            ctx.fillRect(player.x + 10, player.y + 10, 8, 8);
+            ctx.fillRect(player.x + 32, player.y + 10, 8, 8);
+            ctx.fillStyle = 'black';
+            ctx.fillRect(player.x + 18, player.y + 30, 14, 4);
+            
+            // Player glow effect when chased
+            if (policeChasing) {
+                ctx.shadowColor = '#ff6b6b';
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = 'rgba(255,107,107,0.3)';
+                ctx.fillRect(player.x - 5, player.y - 5, player.width + 10, player.height + 10);
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function drawPolice() {
+            if (police.active) {
+                // Police shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.fillRect(police.x + 3, police.y + 3, police.width, police.height);
+                
+                // Police body
+                ctx.fillStyle = '#0066cc';
+                ctx.fillRect(police.x, police.y, police.width, police.height);
+                
+                // Police hat
+                ctx.fillStyle = '#003366';
+                ctx.fillRect(police.x + 5, police.y - 8, police.width - 10, 12);
+                
+                // Police badge
+                ctx.fillStyle = '#ffd700';
+                ctx.fillRect(police.x + 18, police.y + 15, 8, 8);
+                
+                // Police siren effect
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 15;
+                ctx.fillStyle = 'rgba(255,0,0,0.5)';
+                ctx.fillRect(police.x - 3, police.y - 3, police.width + 6, police.height + 6);
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function drawFruits() {
+            const fruitEmojis = ['☁️', '☁️', '☁️', '☁️'];
+            fruits.forEach(fruit => {
+                // Fruit shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                ctx.font = '42px Arial';
+                ctx.fillText(fruitEmojis[fruit.type], fruit.x + 3, fruit.y + 43);
+                
+                // Fruit
+                ctx.font = '40px Arial';
+                ctx.fillText(fruitEmojis[fruit.type], fruit.x, fruit.y + 40);
+                
+                fruit.y += gameSpeed;
+            });
+            
+            // Remove off-screen fruits
+            fruits = fruits.filter(fruit => fruit.y < canvas.height + 50);
+        }
+
+        function drawTraps() {
+            traps.forEach(trap => {
+                // Trap shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.fillRect(trap.x + 3, trap.y + 23, trap.width, trap.height - 10);
+                
+                // Trap base
+                ctx.fillStyle = trap.triggered ? '#666' : '#333';
+                ctx.fillRect(trap.x, trap.y + 20, trap.width, trap.height - 10);
+                
+                // Trap mechanism
+                ctx.fillStyle = trap.triggered ? '#999' : '#555';
+                ctx.fillRect(trap.x + 5, trap.y + 15, trap.width - 10, 8);
+                
+                // Trap teeth
+                ctx.fillStyle = '#ccc';
+                for (let i = 0; i < 4; i++) {
+                    const toothX = trap.x + 8 + i * 12;
+                    ctx.fillRect(toothX, trap.y + 8, 8, 12);
+                }
+                
+                // Warning glow for untrapped traps
+                if (!trap.triggered) {
+                    ctx.shadowColor = '#ff4757';
+                    ctx.shadowBlur = 10;
+                    ctx.strokeStyle = 'rgba(255,71,87,0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(trap.x - 2, trap.y + 6, trap.width + 4, trap.height + 8);
+                    ctx.shadowBlur = 0;
+                }
+                
+                trap.y += gameSpeed;
+            });
+            
+            // Remove off-screen traps
+            traps = traps.filter(trap => trap.y < canvas.height + 50);
+        }
+
+        function drawParticles() {
+            particles.forEach((particle, index) => {
+                const alpha = particle.life / particle.maxLife;
+                ctx.fillStyle = particle.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
+                
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.vx *= 0.98;
+                particle.vy *= 0.98;
+                particle.life--;
+                
+                if (particle.life <= 0) {
+                    particles.splice(index, 1);
+                }
+            });
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawRoads();
+            spawnFruit();
+            spawnTrap();
+            
+            updatePlayer();
+            updatePolice();
+            checkCollisions();
+            
+            drawFruits();
+            drawTraps();
+            drawPlayer();
+            drawPolice();
+            drawParticles();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function endGame(reason) {
+            gameRunning = false;
+            document.getElementById('gameOverTitle').textContent = reason;
+            document.getElementById('gameOverText').innerHTML = `
+                <div style="font-size: 24px; margin: 20px 0;">最終分數：${score}</div>
+                <div style="font-size: 18px; margin: 10px 0;">☁️ 收集到的棉花：${Math.floor(score / 10)}</div>
+                <div style="font-size: 18px; margin: 10px 0;">⏰ 存活時間：${90 - gameTime} 秒</div>
+                <div style="font-size: 18px; margin: 10px 0;">🏆 達到難度：${document.getElementById('difficultyLevel').textContent.split('：')[1]}</div>
+            `;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Recalculate road positions
+            const newRoadWidth = canvas.width / 5;
+            for (let i = 0; i < 5; i++) {
+                roadPositions[i] = {
+                    x: i * newRoadWidth,
+                    width: newRoadWidth,
+                    centerX: i * newRoadWidth + newRoadWidth / 2
+                };
+            }
+        });
+
+        // Initialize road positions
+        window.dispatchEvent(new Event('resize'));
+    </script>
+</body>
+</html>
